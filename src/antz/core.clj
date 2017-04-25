@@ -23,8 +23,10 @@
 
 (defstruct cell :food :pher) ;may also have :ant and :home
 
+(declare world)
+
 ;world is a 2d vector of refs to cells
-(def world
+(defn make-world []
   (apply vector
          (map (fn [_]
                 (apply vector (map (fn [_] (ref (struct cell 0 0)))
@@ -48,19 +50,27 @@
 (def home-off (/ dim 4))
 (def home-range (range home-off (+ nants-sqrt home-off)))
 
+(defn random-places [n]
+  (reduce
+    #(if (< (count %1) n)
+       (conj %1 %2)
+       (reduced %1))
+    #{}
+    (repeatedly
+      (fn [] [(rand-int dim) (rand-int dim)]))))
+
 (defn setup
   "places initial food and ants, returns seq of ant agents"
   []
-  (sync nil
-        (dotimes [i food-places]
-          (let [p (place [(rand-int dim) (rand-int dim)])]
-            (alter p assoc :food (rand-int food-range))))
-        (doall
-          (for [x home-range y home-range]
-            (do
-              (alter (place [x y])
-                     assoc :home true)
-              (create-ant [x y] (rand-int 8)))))))
+  (dosync
+    (doseq [xy (random-places food-places)]
+      (alter (place xy) assoc :food (rand-nth (range 1 food-range))))
+    (doall
+      (for [x home-range y home-range]
+        (do
+          (alter (place [x y])
+                 assoc :home true)
+          (create-ant [x y] (rand-int 8)))))))
 
 (defn bound
   "returns n wrapped into range 0-b"
@@ -183,9 +193,9 @@
                                   (rank-by (comp #(if (:home %) 1 0) deref) places)
                                   (rank-by (comp :pher deref) places))]
             (([move #(turn % -1) #(turn % 1)]
-               (wrand [(if (:ant @ahead) 0 (ranks ahead))
-                       (ranks ahead-left) (ranks ahead-right)]))
-              loc)))
+              (wrand [(if (:ant @ahead) 0 (ranks ahead))
+                      (ranks ahead-left) (ranks ahead-right)]))
+             loc)))
         ;foraging
         (cond
           (and (pos? (:food @p)) (not (:home @p)))
@@ -197,9 +207,9 @@
                                   (rank-by (comp :food deref) places)
                                   (rank-by (comp :pher deref) places))]
             (([move #(turn % -1) #(turn % 1)]
-               (wrand [(if (:ant @ahead) 0 (ranks ahead))
-                       (ranks ahead-left) (ranks ahead-right)]))
-              loc)))))))
+              (wrand [(if (:ant @ahead) 0 (ranks ahead))
+                      (ranks ahead-left) (ranks ahead-right)]))
+             loc)))))))
 
 (defn evaporate
   "causes all the pheromones to evaporate a bit"
@@ -236,7 +246,7 @@
                         5 [0 4 4 0]
                         6 [0 2 4 2]
                         7 [0 0 4 4]}
-                        (:dir ant))]
+                       (:dir ant))]
     (doto g
       (.setColor (if (:food ant)
                    (new Color 255 0 0 255)
@@ -273,13 +283,20 @@
     (. g (drawImage img 0 0 nil))
     (. bg (dispose))))
 
-(def panel (doto (proxy [JPanel] []
-                   (paint [g] (render g)))
-             (.setPreferredSize (new Dimension
-                                     (* scale dim)
-                                     (* scale dim)))))
+(declare panel)
 
-(def frame (doto (new JFrame) (.add panel) .pack .show))
+(defn make-panel []
+  (doto (proxy [JPanel] []
+          (paint [g] (render g)))
+    (.setPreferredSize (new Dimension
+                         (* scale dim)
+                         (* scale dim)))))
+
+(defn make-frame []
+  (doto (new JFrame)
+    (.add panel)
+    .pack
+    .show))
 
 (def animator (agent nil))
 
@@ -299,13 +316,11 @@
   (. Thread (sleep evap-sleep-ms))
   nil)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; use ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; (comment
-;demo
-;; (load-file "/Users/rich/dev/clojure/ants.clj")
-(def ants (setup))
-(send-off animator animation)
-(dorun (map #(send-off % behave) ants))
-(send-off evaporator evaporation)
-
-;; )
+(defn go []
+  (alter-var-root (var world) (constantly (make-world)))
+  (alter-var-root (var panel) (constantly (make-panel)))
+  (make-frame)
+  (let [ants (setup)]
+    (send-off animator animation)
+    (send-off evaporator evaporation)
+    (dorun (map #(send-off % behave) ants))))
