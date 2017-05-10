@@ -293,10 +293,11 @@
                          (* scale dim)))))
 
 (defn make-frame []
-  (doto (new JFrame)
+  (doto (JFrame. "Ants")
     (.add panel)
     .pack
-    .show))
+    .show
+    (.setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)))
 
 (def animator (agent nil))
 
@@ -317,8 +318,8 @@
   nil)
 
 (defn go []
-  (alter-var-root (var world) (constantly (make-world)))
-  (alter-var-root (var panel) (constantly (make-panel)))
+  (alter-var-root #'world (constantly (make-world)))
+  (alter-var-root #'panel (constantly (make-panel)))
   (make-frame)
   (let [ants (setup)]
     (send-off animator animation)
