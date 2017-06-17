@@ -295,9 +295,9 @@
 (defn make-frame []
   (doto (JFrame. "Ants")
     (.add panel)
-    .pack
-    .show
-    (.setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)))
+    (.pack)
+    (.show)
+    (.setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)))
 
 (def animator (agent nil))
 
@@ -317,7 +317,7 @@
   (. Thread (sleep evap-sleep-ms))
   nil)
 
-(defn go []
+(defn run []
   (alter-var-root #'world (constantly (make-world)))
   (alter-var-root #'panel (constantly (make-panel)))
   (make-frame)
@@ -325,3 +325,5 @@
     (send-off animator animation)
     (send-off evaporator evaporation)
     (dorun (map #(send-off % behave) ants))))
+
+(def -main run)
